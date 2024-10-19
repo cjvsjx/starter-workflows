@@ -1,0 +1,80 @@
+name: Odoo CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_DB: odoo_db
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: "132456789*"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ${{ secrets.POSTGRES_USER }}" 
+          --health-interval 10s 
+          --health-timeout 5s 
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.8
+
+    - name: Install dependencies
+      run: |
+        python3 -m pip install -r requirements.txt
+
+    - name: Install Odoo
+      run: |
+        git clone https://github.com/odoo/odoo.git --branch 15.0 --depth 1
+        cd odoo && python3 -m pip install -r requirements.txt
+
+    - name: Set up Odoo configuration
+      run: |
+        echo "[options]" > odoo.conf
+        echo "addons_path = ./addons" >> odoo.conf
+        echo "db_host = localhost" >> odoo.conf
+        echo "db_port = 5432" >> odoo.conf
+        echo "db_user = odoo" >> odoo.conf
+        echo "db_password = '132456789*'" >> odoo.conf
+        echo "db_name = odoo_db" >> odoo.conf
+
+    - name: Run unit tests
+      run: |
+        python odoo-bin -r odoo -w '132456789*' --addons-path=addons -d odoo_db --test-enable --stop-after-init
+      env:
+        PGHOST: localhost
+        PGUSER: odoo
+        PGPASSWORD: "132456789*"
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Deploy to server
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} 'bash -s' < ./deploy.sh
+      env:
+        SSH_USER: ${{ secrets.SSH_USER }}
+        SERVER_IP: ${{ secrets.SERVER_IP }}
+        ODOO_USER: ${{ secrets.ODOO_USER }}
+        ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
