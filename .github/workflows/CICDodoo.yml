@@ -1,0 +1,65 @@
+name: Odoo CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - develop
+  pull_request:
+    branches:
+      - main
+      - staging
+      - develop
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
+      - name: Install Odoo
+        run: |
+          git clone https://github.com/odoo/odoo.git --branch 15.0 --depth 1
+          cd odoo && python3 -m pip install -r requirements.txt
+      - name: Set up Odoo configuration
+        run: |
+          echo "[options]" > odoo.conf
+          echo "addons_path = ./addons" >> odoo.conf
+          echo "db_host = ${{ secrets.DB_HOST }}" >> odoo.conf
+          echo "db_port = 5432" >> odoo.conf
+          echo "db_user = ${{ secrets.DB_USER }}" >> odoo.conf
+          echo "db_password = ${{ secrets.DB_PASSWORD }}" >> odoo.conf
+          echo "db_name = ${{ secrets.DB_NAME }}" >> odoo.conf
+      - name: Run unit tests
+        run: |
+          python odoo-bin -r ${{ secrets.DB_USER }} -w ${{ secrets.DB_PASSWORD }} --addons-path=addons -d ${{ secrets.DB_NAME }} --test-enable --stop-after-init
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.DB_USER }}
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Determine deployment branch
+        id: vars
+        run: echo "BRANCH=$(echo ${GITHUB_REF} | awk -F'/' '{print $3}')" >> $GITHUB_ENV
+      - name: Deploy to Odoo.sh
+        run: |
+          curl -X POST "https://YOUR_ODOO_SH_INSTANCE/api/deploy" \
+          -H "Authorization: Bearer ${{ secrets.ODOO_SH_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d "{\"branch\": \"${{ env.BRANCH }}\"}"
+        env:
+          ODOO_SH_TOKEN: ${{ secrets.ODOO_SH_TOKEN }}
