@@ -27,7 +27,7 @@ jobs:
           python3 -m pip install -r requirements.txt
       - name: Install Odoo
         run: |
-          git clone https://github.com/odoo/odoo.git --branch 15.0 --depth 1
+          git clone https://github.com/odoo/odoo.git --branch 18.0 --depth 1
           cd odoo && python3 -m pip install -r requirements.txt
       - name: Set up Odoo configuration
         run: |
@@ -57,7 +57,7 @@ jobs:
         run: echo "BRANCH=$(echo ${GITHUB_REF} | awk -F'/' '{print $3}')" >> $GITHUB_ENV
       - name: Deploy to Odoo.sh
         run: |
-          curl -X POST "https://YOUR_ODOO_SH_INSTANCE/api/deploy" \
+          curl -X POST "https://metrodoo.odoo.com/api/deploy" \
           -H "Authorization: Bearer ${{ secrets.ODOO_SH_TOKEN }}" \
           -H "Content-Type: application/json" \
           -d "{\"branch\": \"${{ env.BRANCH }}\"}"
